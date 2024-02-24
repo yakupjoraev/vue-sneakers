@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, provide, reactive, ref, watch } from 'vue'
+import { computed, onMounted, provide, reactive, ref, watch } from 'vue'
 import axios from 'axios'
 
 import CardList from './components/CardList.vue'
@@ -7,12 +7,61 @@ import Drawer from './components/Drawer.vue'
 import Header from './components/Header.vue'
 
 const items = ref([]) // { value:[] } // когда используем ref всё становиться объектом
+const cart = ref([])
+
+const drawerOpen = ref(false)
+
+const totalPrice = computed(() => cart.value.reduce((acc, item) => acc + item.price, 0))
+
+const vatPrice = computed(() => Math.round((totalPrice.value * 5) / 100))
+
+const closeDrawer = () => {
+  drawerOpen.value = false
+}
+
+const openDrawer = () => {
+  drawerOpen.value = true
+}
 
 // filters
 const filters = reactive({
   sortBy: 'title',
   searchQuery: ''
 })
+
+const addToCart = (item) => {
+  cart.value.push(item)
+  item.isAdded = true
+}
+
+const removeFromCart = (item) => {
+  cart.value.splice(cart.value.indexOf(item), 1)
+  item.isAdded = false
+}
+
+const createOrder = async () => {
+  try {
+    const { data } = await axios.post(`https://bf2dfdafc6871aaa.mokky.dev/orders`, {
+      items: cart.value,
+      totalPrice: totalPrice.value
+    })
+    cart.value = []
+
+    return data
+  } catch (error) {
+    console.log(error)
+  }
+}
+
+const onnClickAddPlus = (item) => {
+  if (!item.isAdded) {
+    addToCart(item)
+  } else {
+    removeFromCart(item)
+  }
+
+  console.log(cart)
+}
 
 const onChangeSelect = (event) => {
   filters.sortBy = event.target.value
@@ -94,7 +143,13 @@ onMounted(async () => {
 })
 watch(filters, fetchItems)
 
-provide('addToFavorite', addToFavorite)
+provide('cart', {
+  cart,
+  closeDrawer,
+  openDrawer,
+  addToCart,
+  removeFromCart
+})
 
 // сортировка
 // const sortBy = ref('')
@@ -139,9 +194,15 @@ provide('addToFavorite', addToFavorite)
 </script>
 
 <template>
-  <!-- <Drawer /> -->
+  <Drawer
+    v-if="drawerOpen"
+    :total-price="totalPrice"
+    :vat-price="vatPrice"
+    @create-order="createOrder"
+  />
+
   <div class="w-4/5 m-auto bg-white rounded-xl shadow-xl mt-14">
-    <Header />
+    <Header :total-price="totalPrice" @open-drawer="openDrawer" />
 
     <div class="p-10">
       <div class="flex justify-between items-center">
@@ -167,7 +228,7 @@ provide('addToFavorite', addToFavorite)
       </div>
 
       <div class="mt-10">
-        <CardList :items="items" @addToFavorite="addToFavorite" />
+        <CardList :items="items" @add-to-favorite="addToFavorite" @add-to-cart="onnClickAddPlus" />
       </div>
     </div>
   </div>
