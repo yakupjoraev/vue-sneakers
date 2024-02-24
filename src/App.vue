@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, reactive, ref, watch } from 'vue'
+import { onMounted, provide, reactive, ref, watch } from 'vue'
 import axios from 'axios'
 
 import CardList from './components/CardList.vue'
@@ -22,6 +22,49 @@ const onChangeSearchInput = (event) => {
   filters.searchQuery = event.target.value
 }
 
+const fetchFavorites = async () => {
+  try {
+    const { data: favorites } = await axios.get('https://bf2dfdafc6871aaa.mokky.dev/favorites')
+    items.value = items.value.map((item) => {
+      const favorite = favorites.find((favorite) => favorite.parentId === item.id)
+
+      if (!favorite) {
+        return item
+      }
+
+      return {
+        ...item,
+        isFavorite: true,
+        favoriteId: favorite.id
+      }
+    })
+  } catch (err) {
+    console.log(err)
+  }
+}
+
+const addToFavorite = async (item) => {
+  try {
+    if (!item.isFavorite) {
+      const obj = {
+        parentId: item.id
+      }
+      const { data } = await axios.post(`https://bf2dfdafc6871aaa.mokky.dev/favorites`, obj)
+
+      item.isFavorite = true
+      item.favoriteId = data.id
+
+      console.log(data)
+    } else {
+      await axios.delete(`https://bf2dfdafc6871aaa.mokky.dev/favorites/${item.favoriteId}`)
+      item.isFavorite = false
+      item.favoriteId = null
+    }
+  } catch (err) {
+    console.log(err)
+  }
+}
+
 const fetchItems = async () => {
   try {
     const params = {
@@ -33,14 +76,25 @@ const fetchItems = async () => {
       params.title = `*${filters.searchQuery}*`
     }
     const { data } = await axios.get('https://bf2dfdafc6871aaa.mokky.dev/items', { params })
-    items.value = data
+
+    items.value = data.map((obj) => ({
+      ...obj,
+      isFavorite: false,
+      favoriteId: null,
+      isAdded: false
+    }))
   } catch (err) {
     console.log(err)
   }
 }
 
-onMounted(fetchItems)
+onMounted(async () => {
+  await fetchItems()
+  await fetchFavorites()
+})
 watch(filters, fetchItems)
+
+provide('addToFavorite', addToFavorite)
 
 // сортировка
 // const sortBy = ref('')
@@ -113,7 +167,7 @@ watch(filters, fetchItems)
       </div>
 
       <div class="mt-10">
-        <CardList :items="items" />
+        <CardList :items="items" @addToFavorite="addToFavorite" />
       </div>
     </div>
   </div>
