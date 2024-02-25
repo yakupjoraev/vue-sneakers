@@ -1,13 +1,41 @@
 <script setup>
+import { computed, inject, provide, ref } from 'vue'
+import axios from 'axios'
+
 import DrawerHead from './DrawerHead.vue'
 import CartListItem from './CartListItem.vue'
+import InfoBlock from './InfoBlock.vue'
 
-defineProps({
+const props = defineProps({
   totalPrice: Number,
   vatPrice: Number
 })
 
-const emit = defineEmits(['createOrder'])
+const { cart, closeDrawer } = inject('cart')
+
+const isCreating = ref(false)
+const orderId = ref(null)
+
+const createOrder = async () => {
+  try {
+    isCreating.value = true
+
+    const { data } = await axios.post(`https://bf2dfdafc6871aaa.mokky.dev/orders`, {
+      items: cart.value,
+      totalPrice: props.totalPrice.value
+    })
+
+    cart.value = []
+
+    orderId.value = data.id
+  } catch (error) {
+    console.log(error)
+  } finally {
+    isCreating.value = false
+  }
+}
+const cartIsEmpty = computed(() => cart.value.length === 0)
+const buttonDisabled = computed(() => isCreating.value || cartIsEmpty.value)
 </script>  
 
 <template>
@@ -16,28 +44,47 @@ const emit = defineEmits(['createOrder'])
   <div class="bg-white w-96 h-full fixed right-0 top-0 z-20 p-8 flex flex-col">
     <DrawerHead />
 
-    <CartListItem />
+    <div v-if="!totalPrice || orderId" class="flex h-full items-center">
+      <InfoBlock
+        v-if="!totalPrice && !orderId"
+        title="Корзина пустая"
+        description="Добавьте хотя бы одну пару кроссовок, чтобы сделать заказ."
+        image-url="/package-icon.png"
+      />
 
-    <div class="flex flex-col gap-4 my-7">
-      <div class="flex gap-2 items-end">
-        <span>Итого:</span>
-        <div class="flex-1 border-b border-dashed"></div>
-        <b>{{ totalPrice }} ₽</b>
+      <InfoBlock
+        v-if="orderId"
+        title="Заказ оформлен!"
+        :description="`Ваш заказ #${orderId} скоро
+      будет передан курьерской доставке`"
+        image-url="/order-success-icon.png"
+      />
+    </div>
+
+    <div v-else>
+      <CartListItem />
+
+      <div class="flex flex-col gap-4 my-7">
+        <div class="flex gap-2 items-end">
+          <span>Итого:</span>
+          <div class="flex-1 border-b border-dashed"></div>
+          <b>{{ totalPrice }} ₽</b>
+        </div>
+
+        <div class="flex gap-2 items-end">
+          <span>Налог 5%</span>
+          <div class="flex-1 border-b border-dashed"></div>
+          <b>{{ vatPrice }} ₽</b>
+        </div>
+
+        <button
+          :disabled="buttonDisabled"
+          @click="createOrder"
+          class="transition mt-4 bg-lime-500 w-full rounded-xl py-3 text-white disabled:bg-slate-400 hover:bg-lime-600 active:bg-lime-700 cursor-pointer"
+        >
+          Оформить заказ
+        </button>
       </div>
-
-      <div class="flex gap-2 items-end">
-        <span>Налог 5%</span>
-        <div class="flex-1 border-b border-dashed"></div>
-        <b>{{ vatPrice }} ₽</b>
-      </div>
-
-      <button
-        :disabled="totalPrice ? false : true"
-        @click="() => emit('createOrder')"
-        class="transition mt-4 bg-lime-500 w-full rounded-xl py-3 text-white disabled:bg-slate-400 hover:bg-lime-600 active:bg-lime-700 cursor-pointer"
-      >
-        Оформить заказ
-      </button>
     </div>
   </div>
 </template> 
